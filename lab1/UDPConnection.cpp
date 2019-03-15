@@ -1,5 +1,8 @@
 #include "UDPConnection.h"
 
+const char* loggerIP = "237.0.0.0";
+const int loggerPort = 10000;
+
 char* id;
 char* myIP;
 int myPort;
@@ -8,8 +11,12 @@ int successorPort;
 int protocolId;
 int hasToken;
 
+
+
 int mySocket;
 int neigbourSocket;
+int loggerSocket;
+
 
 pthread_t listener;
 pthread_t sender;
@@ -43,9 +50,17 @@ int initNeighbourSocket() {
     }
 }
 
+int initLoggerSocket() {
+    if ((loggerSocket = socket(AF_INET, SOCK_DGRAM, protocolId)) < 0) {
+        printf("%s\n", "Error during initializing logger socket");
+        exit(EXIT_FAILURE);
+    }
+}
+
 int init() {
     initMySocket();
     initNeighbourSocket();
+    initLoggerSocket();
 }
 
 int sendToken(Token token) {
@@ -115,6 +130,31 @@ void printToken(Token token) {
     printf("\n");
 }
 
+void sendInfoToLogger(Token token) {
+    char message[MAX_LENGTH] = {'\0'};
+    sprintf(
+            message,
+            "%s:%d %s",
+            myIP,
+            myPort,
+            id
+        );
+
+
+    struct sockaddr_in socketAddress;
+
+    socketAddress.sin_family = AF_INET;
+    socketAddress.sin_addr.s_addr = inet_addr(loggerIP);
+    socketAddress.sin_port = htons(loggerPort);
+
+
+    if(sendto(loggerSocket, (const void*) message, strlen(message), 0, (const struct sockaddr* ) &socketAddress, sizeof(socketAddress)) < 0) {
+        printf("%s\n", "Error during sending of message to logger");
+        exit(EXIT_FAILURE);
+    }
+
+
+}
 
 int startConnection() {
     Token token = createConnectRequestToken();
@@ -147,7 +187,6 @@ int handleFreeAction(Token recivedToken) {
 }
 
 int handleAcceptRequestAction(Token recivedToken) {
-    printf("%s %s %d %d\n", recivedToken.destinationIP, successorIP, recivedToken.destinationPort, successorPort);
     if (strcmp(recivedToken.destinationIP, successorIP) == 0 && recivedToken.destinationPort == successorPort) {
 
 
@@ -163,7 +202,6 @@ int handleAcceptRequestAction(Token recivedToken) {
 }
 
 int handleMessageAction(Token recivedToken) {
-    printf("%s %s %d %d\n", recivedToken.destinationIP, successorIP, recivedToken.destinationPort, successorPort);
     if (strcmp(recivedToken.destinationIP, myIP) == 0 && recivedToken.destinationPort == myPort) {
 
         printf("Message to me: %s\n", recivedToken.message);
@@ -191,7 +229,9 @@ void* startListener(void* none) {
             recivedToken = createFreeToken();
         }
 
-        printToken(recivedToken);
+        if(recivedToken.tokenType != CONNECT_REQUEST) {
+            sendInfoToLogger(recivedToken);
+        }
 
         sleep(1);
 
