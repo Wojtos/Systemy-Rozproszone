@@ -13,53 +13,48 @@ import java.io.InputStreamReader;
 public class Technician {
 
     static Channel channel;
-    static String EXCHANGE_NAME_ORD;
-    static String EXCHANGE_NAME_RET;
+    static String EXCHANGE_NAME = "topic";
 
     public static void main(String[] argv) throws Exception {
-
-        System.out.println("Technician");
-
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
         Connection connection = factory.newConnection();
         channel = connection.createChannel();
         channel.basicQos(1);
 
-        EXCHANGE_NAME_ORD = "ordersE";
-        channel.exchangeDeclare(EXCHANGE_NAME_ORD, BuiltinExchangeType.DIRECT);
+        channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.TOPIC);
 
-        EXCHANGE_NAME_RET = "returnsE";
-        channel.exchangeDeclare(EXCHANGE_NAME_RET, BuiltinExchangeType.DIRECT);
 
-        System.out.println("Types of injuries (knee, elbow, hip): ");
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-        String injury1 = channel.queueDeclare(br.readLine(), false, false, false, null).getQueue();
-        channel.queueBind(injury1, EXCHANGE_NAME_ORD, injury1);
+        String firstInjuryName = br.readLine();
+        String firstInjury = channel.queueDeclare(firstInjuryName, false, false, false, null).getQueue();
+        channel.queueBind(firstInjury, EXCHANGE_NAME, "technican." + firstInjury);
 
-        String injury2 = channel.queueDeclare(br.readLine(), false, false, false, null).getQueue();
-        channel.queueBind(injury2, EXCHANGE_NAME_ORD, injury2);
+        String secondInjuryName = br.readLine();
+        String secondInjury = channel.queueDeclare(secondInjuryName, false, false, false, null).getQueue();
+        channel.queueBind(secondInjury, EXCHANGE_NAME, "technican." + secondInjury);
+
+        System.out.println("Done!");
 
         Consumer consumer = new DefaultConsumer(channel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
                 Message message = Message.fromBytes(body);
-                System.out.println("Received: " + message.toString());
+                System.out.println(message.toString());
 
                 try {
-                    Thread.sleep(2000);
+                    Thread.sleep(1000);
                 }
                 catch (InterruptedException e){
                     e.printStackTrace();
                 }
-                message.examine();
-                channel.basicPublish(EXCHANGE_NAME_RET, message.getDoctorName(), null, message.getBytes());
+                channel.basicPublish(EXCHANGE_NAME, "doctor." + message.getDoctorName(), null, message.getBytes());
                 channel.basicAck(envelope.getDeliveryTag(), false);
             }
         };
 
-        channel.basicConsume(injury1, false, consumer);
-        channel.basicConsume(injury2, false, consumer);
+        channel.basicConsume(firstInjury, false, consumer);
+        channel.basicConsume(secondInjury, false, consumer);
     }
 }

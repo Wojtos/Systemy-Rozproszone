@@ -13,54 +13,53 @@ import java.io.InputStreamReader;
 
 public class Doctor  {
 
-    public static void main(String[] args) throws Exception {
-        System.out.println("Doctor");
+    static String EXCHANGE_NAME = "topic";
 
+    public static void main(String[] args) throws Exception {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
         Connection connection = factory.newConnection();
         Channel channel = connection.createChannel();
         channel.basicQos(1);
 
-        String EXCHANGE_NAME_ORD = "ordersE";
-        channel.exchangeDeclare(EXCHANGE_NAME_ORD, BuiltinExchangeType.DIRECT);
+        channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.TOPIC);
 
-        String EXCHANGE_NAME_RET = "returnsE";
-        channel.exchangeDeclare(EXCHANGE_NAME_RET, BuiltinExchangeType.DIRECT);
 
-        System.out.println("Name of doctor: ");
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        String myName = br.readLine();
-        String queueName = channel.queueDeclare().getQueue();
-        channel.queueBind(queueName, EXCHANGE_NAME_RET, myName);
 
-        Consumer consumer = new DefaultConsumer(channel) {
+        System.out.println("Doctor: ");
+        String doctorName = br.readLine();
+        String queueName = channel.queueDeclare().getQueue();
+        channel.queueBind(queueName, EXCHANGE_NAME, "doctor." + doctorName);
+
+        Consumer technicanConsumer = new DefaultConsumer(channel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
                 Message message = Message.fromBytes(body);
                 System.out.println("Received: " + message.toString());
             }
         };
-        channel.basicConsume(queueName, true, consumer);
+        channel.basicConsume(queueName, true, technicanConsumer);
 
         while (true) {
-            System.out.println("Name of patient: ");
+            System.out.println("Patient: ");
             String nameOfPatient = br.readLine();
 
-            System.out.println("Type of injury: ");
+            System.out.println("Injury: ");
             Injury typeOfInjury = null;
             while(typeOfInjury == null) {
                 try {
                     typeOfInjury = Injury.fromString(br.readLine());
                 } catch (IllegalArgumentException e) {
-                    System.out.println("We can't help you with that. Try: elbow, knee or hip");
+                    System.out.println("Wrong command");
                 }
             }
 
-            Message message = new Message(nameOfPatient, myName, typeOfInjury);
 
-            channel.basicPublish(EXCHANGE_NAME_ORD, typeOfInjury.name().toLowerCase(), null, message.getBytes());
-            System.out.println("Sent: " + message.toString());
+            Message message = new Message(nameOfPatient, doctorName, typeOfInjury);
+            System.out.println("Sending: " + message.toString());
+
+            channel.basicPublish(EXCHANGE_NAME, "technican." + typeOfInjury.name().toLowerCase(), null, message.getBytes());
         }
     }
 }
