@@ -29,11 +29,11 @@ public class Technician {
 
         String firstInjuryName = br.readLine();
         String firstInjury = channel.queueDeclare(firstInjuryName, false, false, false, null).getQueue();
-        channel.queueBind(firstInjury, EXCHANGE_NAME, "technican." + firstInjury);
+        channel.queueBind(firstInjury, EXCHANGE_NAME, "technican." + firstInjuryName);
 
         String secondInjuryName = br.readLine();
         String secondInjury = channel.queueDeclare(secondInjuryName, false, false, false, null).getQueue();
-        channel.queueBind(secondInjury, EXCHANGE_NAME, "technican." + secondInjury);
+        channel.queueBind(secondInjury, EXCHANGE_NAME, "technican." + secondInjuryName);
 
         System.out.println("Done!");
 
@@ -49,12 +49,27 @@ public class Technician {
                 catch (InterruptedException e){
                     e.printStackTrace();
                 }
+
+                message.examine();
                 channel.basicPublish(EXCHANGE_NAME, "doctor." + message.getDoctorName(), null, message.getBytes());
+                channel.basicPublish(EXCHANGE_NAME, "admin.*", null, message.getBytes());
                 channel.basicAck(envelope.getDeliveryTag(), false);
             }
         };
 
         channel.basicConsume(firstInjury, false, consumer);
         channel.basicConsume(secondInjury, false, consumer);
+
+
+        String queueNameAdmin = channel.queueDeclare().getQueue();
+        channel.queueBind(queueNameAdmin, EXCHANGE_NAME, "info.*");
+
+        Consumer adminConsumer = new DefaultConsumer(channel) {
+            @Override
+            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                System.out.println("Admin info: " + new String(body));
+            }
+        };
+        channel.basicConsume(queueNameAdmin, true, adminConsumer);
     }
 }

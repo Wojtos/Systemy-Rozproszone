@@ -29,6 +29,7 @@ public class Doctor  {
 
         System.out.println("Doctor: ");
         String doctorName = br.readLine();
+
         String queueName = channel.queueDeclare().getQueue();
         channel.queueBind(queueName, EXCHANGE_NAME, "doctor." + doctorName);
 
@@ -40,6 +41,19 @@ public class Doctor  {
             }
         };
         channel.basicConsume(queueName, true, technicanConsumer);
+
+        String queueNameAdmin = channel.queueDeclare().getQueue();
+        channel.queueBind(queueNameAdmin, EXCHANGE_NAME, "info.*");
+
+        Consumer adminConsumer = new DefaultConsumer(channel) {
+            @Override
+            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                System.out.println("Admin info: " + new String(body));
+            }
+        };
+        channel.basicConsume(queueNameAdmin, true, adminConsumer);
+
+        System.out.println("Done!");
 
         while (true) {
             System.out.println("Patient: ");
@@ -60,6 +74,7 @@ public class Doctor  {
             System.out.println("Sending: " + message.toString());
 
             channel.basicPublish(EXCHANGE_NAME, "technican." + typeOfInjury.name().toLowerCase(), null, message.getBytes());
+            channel.basicPublish(EXCHANGE_NAME, "admin.*", null, message.getBytes());
         }
     }
 }
