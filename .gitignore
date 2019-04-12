@@ -5,3 +5,5 @@ out
 *.iml
 *.zip
 target/
+libs/
+lib/
