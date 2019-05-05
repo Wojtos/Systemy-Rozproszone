@@ -14,8 +14,10 @@ import java.util.Map;
 public class Client {
     private BankPrx bankPrx;
     private BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-    private static final String BANK_PROXY_FORMAT =  "bank/%s:tcp -h localhost -p 10000";
+    private static final String PROXY_FORMAT =  "%s/%s:tcp -h localhost -p 10000";
     private Map<String, String> currentAuthorization;
+    private AccountPrx currentAccountPrx;
+    private String bankName;
 
     public static void main(String[] args) {
         new Client().init(args);
@@ -25,7 +27,7 @@ public class Client {
         String configFile = args[0];
         try(Communicator communicator = Util.initialize(args, configFile)) {
             this.connectToBank(communicator);
-            this.commandLine();
+            this.commandLine(communicator);
 
 
 
@@ -38,10 +40,11 @@ public class Client {
         while (true){
             System.out.println("Write name of bank, which you want to connect with.");
             try {
-                String line = br.readLine();
+                this.bankName = br.readLine();
                 String proxy = String.format(
-                        BANK_PROXY_FORMAT,
-                        line
+                        PROXY_FORMAT,
+                        "bank",
+                        this.bankName
                 );
                 ObjectPrx base = communicator.stringToProxy(proxy);
                 this.bankPrx = BankPrx.checkedCast(base);
@@ -57,8 +60,8 @@ public class Client {
         }
     }
 
-    private void commandLine() {
-        String line = null;
+    private void commandLine(Communicator communicator) {
+        String line;
         while (true) {
             try {
                 System.out.println("Write command");
@@ -85,7 +88,7 @@ public class Client {
                             );
                     String key = bankPrx.createAccount(accountForm);
                     System.out.println("Created account, your password: " + key);
-                } else if (line.equals("LOG IN")) {
+                } else if (line.equals("LOG IN") && this.currentAccountPrx == null) {
                     System.out.println("PESEL");
                     String pesel = br.readLine();
 
@@ -96,19 +99,30 @@ public class Client {
                     authorization.put("PESEL", pesel);
                     authorization.put("password", password);
 
-                    if (bankPrx.logIn(authorization)) {
+                    String proxy = String.format(
+                            PROXY_FORMAT,
+                            "account" + this.bankName,
+                            pesel
+                    );
+                    ObjectPrx base = communicator.stringToProxy(proxy);
+                    AccountPrx accountPrx = AccountPrx.checkedCast(base);
+
+                    if (accountPrx.checkPassword(password)) {
+                        this.currentAccountPrx = AccountPrx.checkedCast(base);
                         this.currentAuthorization = authorization;
                         System.out.println("Logged in");
                     } else {
-                        System.out.println("Bad PESEL or password");
+                        System.out.println("Wrong password!");
                     }
 
-                } else if (line.equals("LOG OUT")) {
+
+                } else if (line.equals("LOG OUT") && this.currentAccountPrx != null) {
                     this.currentAuthorization = null;
+                    this.currentAccountPrx = null;
                     System.out.println("Logged out");
 
-                } else if (line.equals("INFO")) {
-                    System.out.println(bankPrx.info(this.currentAuthorization));
+                } else if (line.equals("INFO") && this.currentAccountPrx != null) {
+                    System.out.println(this.currentAccountPrx.info(this.currentAuthorization));
                 } else if (line.equals("CREDIT APPLICATION")) {
                     System.out.println("Currency");
                     String currencyShortcut = br.readLine();
@@ -121,7 +135,13 @@ public class Client {
                     System.out.println("Amount");
                     int amount = Integer.parseInt(br.readLine());
 
-                    CreditAcceptance creditAcceptance = bankPrx.applyForCredit(currency, amount, this.currentAuthorization);
+                    System.out.println("Months");
+                    int months = Integer.parseInt(br.readLine());
+
+                    CreditForm creditForm = new CreditForm(amount, months, currency);
+
+                    PremiumAccountPrx premiumAccountPrx = PremiumAccountPrx.checkedCast(this.currentAccountPrx);
+                    CreditAcceptance creditAcceptance = bankPrx.applyForCredit(premiumAccountPrx, creditForm, this.currentAuthorization);
 
                     if (creditAcceptance != null){
                         System.out.println("Got credit!");
@@ -143,9 +163,12 @@ public class Client {
                 System.out.println("Couldn't parse string to int");
             } catch (NotAuthorizedException e) {
                 System.out.println("You are not authorized!");
-            }
-            catch (IllegalArgumentException e) {
+            } /*catch (BadLoginOrPasswordException e) {
+                System.out.println("Bad PESEL or password");
+            }*/ catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
+            } catch (Exception e) {
+                System.out.println("Not allowed!");
             }
         }
     }

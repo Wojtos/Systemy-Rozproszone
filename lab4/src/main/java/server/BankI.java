@@ -2,6 +2,7 @@ package server;
 
 import bankApp.*;
 import client.AccountI;
+import client.PremiumAccountI;
 import com.zeroc.Ice.Current;
 import com.zeroc.Ice.Identity;
 
@@ -14,7 +15,7 @@ public class BankI implements Bank {
     private Set<Currency> servicedCurrencies;
     private String name;
     private MockExchangeOffice exchangeOffice = new MockExchangeOffice();
-    private static final double MARKUP = 1.33;
+    private static final double MARKUP = 0.1;
 
     public BankI(String name, Set<Currency> servicedCurrencies) {
         this.name = name;
@@ -31,7 +32,13 @@ public class BankI implements Bank {
         }
 
         String plainPassword = PasswordService.getInstance().generatePassword();
-        Account newAccount = new AccountI(accountForm, plainPassword);
+
+        Account newAccount;
+        if (accountForm.monthlyIncome > 2000) {
+            newAccount = new PremiumAccountI(accountForm, plainPassword);
+        } else {
+            newAccount = new AccountI(accountForm, plainPassword);
+        }
 
 
         Identity identity = new Identity(pesel, "account" + this.name);
@@ -44,48 +51,36 @@ public class BankI implements Bank {
     }
 
     @Override
-    public CreditAcceptance applyForCredit(Currency currency, long amount, Current current) throws NotAuthorizedException {
-        if (!this.isCurrencyServiced(currency, current)) {
+    public CreditAcceptance applyForCredit(PremiumAccountPrx premiumAccountPrx, CreditForm creditForm, Current current) throws NotAuthorizedException {
+        String pesel = current.ctx.get("PESEL");
+        String password = current.ctx.get("password");
+
+        if (!premiumAccountPrx.checkPassword(password)) {
+            throw new NotAuthorizedException();
+        }
+
+        if (!this.existsAccountByPesel(pesel)) {
+            throw new NotAuthorizedException();
+        }
+
+        if (!this.isCurrencyServiced(creditForm.creditCurrency, current)) {
             return null;
         }
-        String pesel = current.ctx.get("PESEL");
-        Account account = this.getAccountByPesel(pesel);
 
-        double ratioToPLN = exchangeOffice.getRatioToPLN(currency);
+        double ratioToPLN = exchangeOffice.getRatioToPLN(creditForm.creditCurrency);
 
-        long dispensedAmountPLN = Math.round(amount * ratioToPLN);
-        account.addCreditCash(dispensedAmountPLN, current);
+        long dispensedAmountPLN = Math.round(creditForm.amount * ratioToPLN);
+        premiumAccountPrx.addCreditCash(dispensedAmountPLN);
+
+        double wholeCreditMarkup = creditForm.months * MARKUP;
 
         CreditAcceptance creditAcceptance = new CreditAcceptance();
-        creditAcceptance.amountOrginal = Math.round(amount * MARKUP);
+        creditAcceptance.amountOrginal = Math.round(creditForm.amount * (1 + wholeCreditMarkup));
         creditAcceptance.amountPLN = Math.round(creditAcceptance.amountOrginal * ratioToPLN);
-        creditAcceptance.orginalCurrency = currency;
+        creditAcceptance.orginalCurrency = creditForm.creditCurrency;
 
         System.out.println("Accepted credit application, cashed " + dispensedAmountPLN + " PLN!");
         return creditAcceptance;
-    }
-
-    @Override
-    public String info(Current current) throws NotAuthorizedException{
-        if (this.logIn(current)) {
-            String pesel = current.ctx.get("PESEL");
-            Account account = this.getAccountByPesel(pesel);
-            return account._toString(current);
-        } else {
-            throw new NotAuthorizedException();
-        }
-    }
-
-    @Override
-    public boolean logIn(Current current) {
-        String pesel = current.ctx.get("PESEL");
-        String password = current.ctx.get("password");
-        if (accountsByPesel.containsKey(pesel)) {
-            Account account = accountsByPesel.get(pesel);
-            return account.checkPassword(password, current);
-        } else {
-            return false;
-        }
     }
 
     @Override
@@ -93,7 +88,11 @@ public class BankI implements Bank {
         return this.servicedCurrencies.contains(currency);
     }
 
-    private Account getAccountByPesel(String pesel) {
-        return this.accountsByPesel.get(pesel);
+    private boolean existsAccountByPesel(String pesel) {
+        return this.accountsByPesel.containsKey(pesel);
+    }
+
+    private Identity createAccountIdentity(String pesel) {
+        return new Identity(pesel, "account" + this.name);
     }
 }

@@ -13,29 +13,36 @@ module bankApp
     long monthlyIncome;
   }
 
+  struct CreditForm{
+      long amount;
+      long months;
+      Currency creditCurrency;
+  }
+
   struct CreditAcceptance {
       long amountOrginal;
       long amountPLN;
       Currency orginalCurrency;
-    }
+  }
 
   exception AccountExistsException {}
   exception NotAuthorizedException {}
+  exception OperationNotAllowedException {}
 
   interface Account
   {
-    string getPesel();
-    string toString();
     bool checkPassword(string password);
-    void addCreditCash(long amount);
+    string info() throws NotAuthorizedException;
   };
+
+  interface PremiumAccount extends Account {
+      void addCreditCash(long amount);
+  }
 
   interface Bank
   {
     string createAccount(AccountForm accountForm) throws AccountExistsException;
-    CreditAcceptance applyForCredit(Currency currency, long amount) throws NotAuthorizedException;
-    string info() throws NotAuthorizedException;
-    bool logIn();
+    CreditAcceptance applyForCredit(PremiumAccount* account, CreditForm creditForm) throws NotAuthorizedException;
     bool isCurrencyServiced(Currency currency);
   };
 };

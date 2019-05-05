@@ -76,12 +76,5 @@ public class Server
         }
     }
 
-/*    private Currency tryToAddCurrency(String currencyShortcut) {
-        try {
-            Currency currency = Currency.valueOf(currencyShortcut);
-        } catch (Exception e) {
-            System.out.println(e.getClass().toString());
-        }
-    }*/
 
 }
