@@ -1,0 +1,18 @@
+syntax = "proto3";
+package currencyExchangeValue;
+
+enum Currency { PLN = 0; USD = 1; EUR = 2; };
+
+message Application {
+    repeated Currency currency = 1;
+}
+
+message Response {
+    Currency currency = 1;
+    double value = 2;
+}
+
+
+service CurrencyExchangeValue {
+    rpc Register (Application) returns (stream Response) {}
+}

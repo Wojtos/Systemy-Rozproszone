@@ -14,7 +14,8 @@ public class BankI implements Bank {
     private Map<String, Account> accountsByPesel = new HashMap<>();
     private Set<Currency> servicedCurrencies;
     private String name;
-    private MockExchangeOffice exchangeOffice = new MockExchangeOffice();
+    private ExchangeOffice exchangeOffice = new ExchangeOfficeGrpc("localhost", 50051);
+    //private ExchangeOffice exchangeOffice = new MockExchangeOffice();
     private static final double MARKUP = 0.1;
 
     public BankI(String name, Set<Currency> servicedCurrencies) {
@@ -27,7 +28,7 @@ public class BankI implements Bank {
         String pesel = accountForm.pesel;
 
         if (accountsByPesel.containsKey(pesel)){
-            System.out.println("Didn't created account - account having the same PESEL exists");
+            System.out.println("Didn't create account - account having the same PESEL exists");
             throw new AccountExistsException();
         }
 
